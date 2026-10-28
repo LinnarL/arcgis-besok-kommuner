@@ -2,6 +2,17 @@
 
 ArcGIS Pro Python toolbox som planerar den körbara rutt mellan två punkter som går in i flest nya kommuner i Sverige inom en given tid. Kommuner du redan har besökt kan anges och räknas då inte.
 
+## Kommunfångst
+
+Verktyget är gjort för kommunfångst: att samla så många kommuner som möjligt och sätta riktigt höga poäng. Ange vilka kommuner du redan har tagit, välj hur lång tid du har, och få den rutt som ger flest nya kommuner på den tiden.
+
+- En dagstur: ange bara en startpunkt, så får du en rundtur som utnyttjar hela tidsramen och tar flest nya kommuner innan du är hemma igen.
+- En längre resa: ange start och slut, och ta så många kommuner som möjligt på vägen.
+- Små kommuner nära varandra och motorvägar mellan dem lönar sig mest. Verktyget väger in vägarnas hastighet, så det hittar de sträckor där många kommuner går att ta på kort tid.
+- Exportera rutten som GPX och lägg in den i GPS eller mobilapp.
+
+Kommuner som rutten bara passerar räknas också som nya (minst 500 m inne i kommunen). Kontrollera mot dina egna regler vad som krävs för att en kommun ska räknas som besökt.
+
 ## Krav
 
 - ArcGIS Pro 3.x (testad på 3.6). Ingen extra licens eller extension behövs.
