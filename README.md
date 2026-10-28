@@ -11,7 +11,7 @@ Verktyget är gjort för kommunfångst: att samla så många kommuner som möjli
 - Små kommuner nära varandra och motorvägar mellan dem lönar sig mest. Verktyget väger in vägarnas hastighet, så det hittar de sträckor där många kommuner går att ta på kort tid.
 - Exportera rutten som GPX och lägg in den i GPS eller mobilapp.
 
-Kommuner som rutten bara passerar räknas också som nya (minst 500 m inne i kommunen). Kontrollera mot dina egna regler vad som krävs för att en kommun ska räknas som besökt.
+Kommuner som rutten bara passerar räknas också som nya så snart rutten går minst 10 m in i kommunen.
 
 ## Krav
 
@@ -48,7 +48,7 @@ Status i kommunlagret: `Nytt stopp`, `Nytt, passeras`, `Nytt, start/slut`, `Reda
 - Restiderna kommer från OSRM (bilprofil, OpenStreetMap). Tiden följer vägarnas skyltade hastighet och vägtyp, så en motorväg är snabbare än en landsväg. Färjor ingår med den tid OpenStreetMap anger, utan väntetid.
 - Varje kommun representeras av en punkt inuti polygonen. Restiderna mellan de 290 punkterna hämtas en gång (16 anrop) och sparas i `%LOCALAPPDATA%\BesokKommuner`. Senare körningar hämtar bara tiderna till och från start- och slutpunkten.
 - Rutten väljs med en heuristik (billigaste insättning, 2-opt, flytt av stopp och iterativ lokal sökning) som ger flest nya kommuner inom tidsramen. Heuristiken garanterar inte det globala optimumet, men tre olika slumptal gav samma rutt i test.
-- Den verkliga rutten hämtas sedan från OSRM och skärs mot kommunerna. En kommun räknas som passerad om rutten är minst 500 m inne i den, och räknas då som ny utan att vara ett stopp.
+- Den verkliga rutten hämtas sedan från OSRM och skärs mot kommunerna. En kommun räknas som passerad om rutten går minst 10 m in i den, och räknas då som ny utan att vara ett stopp. De standardgränser som hämtas är generaliserade (cirka 1 km), så ett så kort inträde på en gräns kan bli fel åt båda hållen. Ange ett eget kommunlager med exakta gränser för att få det rätt.
 - Blir verklig tid längre än tidsramen planeras rutten om med marginal.
 
 ## Att känna till
