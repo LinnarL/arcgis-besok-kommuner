@@ -16,7 +16,7 @@ Catalog-fönstret: högerklicka Toolboxes, Add Toolbox, välj `BesokKommuner.pyt
 | Parameter | Beskrivning |
 |---|---|
 | Startpunkt | Punktlager eller en ritad punkt. Första punkten används. |
-| Slutpunkt | Valfri. Tom betyder rundtur till startpunkten. |
+| Slutpunkt | Valfri. Tom betyder att bara startpunkten används: rutten börjar och slutar där och utnyttjar hela tidsramen (rundtur). |
 | Tidsram (timmar) | Total tid från start till slut, körtid och uppehåll inräknat. 0,25 till 96. |
 | Redan besökta kommuner | Kryssruteslista med alla 290 kommuner. |
 | Tabell med besökta kommuner | Valfri tabell. Läggs till kryssrutornas val. |

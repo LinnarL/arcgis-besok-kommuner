@@ -166,8 +166,9 @@ TOOLTIPS = {
         "punkter finns används den första. Kommunen där punkten ligger räknas som besökt."
     ),
     "end": (
-        "Var rutten slutar. Lämnas tom används startpunkten, så att rutten blir en rundtur. "
-        "Kommunen där punkten ligger räknas som besökt."
+        "Var rutten slutar. Lämnas tom används bara startpunkten: rutten börjar och slutar då "
+        "där och går ut i så många nya kommuner som tidsramen räcker till innan den vänder "
+        "hem igen (rundtur). Kommunen där punkten ligger räknas som besökt."
     ),
     "time_h": (
         "Hur lång tid rutten får ta, i timmar, räknat från start till slut. Körtiden och "
@@ -805,6 +806,9 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
     roundtrip = end_pt is None
     if roundtrip:
         end_pt = start_pt
+        messages.addMessage(
+            "Ingen slutpunkt angiven: planerar en rundtur som börjar och slutar i startpunkten "
+            "och utnyttjar tidsramen på {} h.".format(_fmt_num(hours, 1)))
     if not (0 < hours):
         raise ValueError("Tidsramen måste vara större än noll.")
 
