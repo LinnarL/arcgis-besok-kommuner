@@ -60,7 +60,6 @@ HTTP_RETRIES = 5
 TABLE_BLOCKS = (90, 50, 25)       # källor x mål per matrisanrop, minskas om servern nekar
 STALL_LIMIT = 20000              # förbättringsvarv i rad utan ny bästa rutt innan sökningen avslutas
 MIN_PASS_M = 10.0                 # så lång sträcka (m) ska rutten ha i en kommun för att räknas
-DEFAULT_HOURS = 10.0
 DEFAULT_SOLVER_SECONDS = 30
 _SYNC_HINTS = ("onedrive", "sharepoint", "dropbox", "google drive")
 
@@ -154,10 +153,31 @@ VISITED_LABELS = ["{} ({})".format(n, c) for c, n in KOMMUNER]
 
 TOOL_SUMMARY = (
     "Planerar den körbara rutt mellan en start- och en slutpunkt som går in i flest nya "
-    "kommuner inom en tidsram. Restiderna kommer från OpenStreetMap-vägnätet via OSRM och "
-    "tar hänsyn till vägarnas hastighet. Kommuner som du redan har besökt kan anges i en "
-    "kryssruteslista eller i en tabell, och räknas då inte. Resultatet är en rutt och ett "
-    "kommunlager som visar vilka kommuner som blir stopp, passeras eller redan är besökta."
+    "kommuner inom en tidsram. Passar för kommunfångst. Restiderna kommer från "
+    "OpenStreetMap-vägnätet via OSRM och tar hänsyn till vägarnas hastighet, så motorvägar "
+    "lönar sig framför små vägar.\n"
+    "Så använder du verktyget:\n"
+    "1. Välj eller rita en startpunkt. Ange en slutpunkt om rutten ska sluta på ett annat "
+    "ställe. Lämnar du slutpunkten tom planeras en rundtur som börjar och slutar i "
+    "startpunkten.\n"
+    "2. Ange tidsramen i timmar. Körtid och uppehåll ingår. Lämnar du tidsramen tom planeras "
+    "i stället den kortaste rutten som tar alla kommuner du inte redan besökt, vilket kan "
+    "bli flera dygn.\n"
+    "3. Kryssa i de kommuner du redan har besökt, eller peka ut en tabell med kommunkoder "
+    "eller kommunnamn. Besökta kommuner ger ingen poäng, men rutten får köra genom dem.\n"
+    "4. Välj var rutten och kommunlagret ska sparas. Vill du ha rutten i GPS eller mobil "
+    "anger du också en GPX-fil.\n"
+    "5. Kör. Första gången hämtas restider mellan alla kommuner (cirka 20 sekunder) och sparas "
+    "i en cache, så att senare körningar går snabbare. Längre beräkningstid under Alternativ "
+    "kan ge fler kommuner eller en kortare rutt.\n"
+    "Resultat: rutten som en linje, och alla kommuner med status Nytt stopp, Nytt, passeras, "
+    "Nytt, start/slut, Redan besökt eller Inte besökt. Stoppen har ordningsnummer och "
+    "ankomsttid. En kommun räknas som besökt när rutten går minst 10 m in i den.\n"
+    "Att tänka på: restiden är modellens, utan trafik, rast och väntetid; justera med "
+    "hastighetsprocenten och uppehållstiden. Färjor ingår bara om de finns i "
+    "OpenStreetMap. Standardgränserna för kommunerna är generaliserade, ange ett eget "
+    "kommunlager under Datakällor för exakta gränser. Den publika OSRM-servern är till för "
+    "måttlig användning."
 )
 
 TOOLTIPS = {
@@ -173,7 +193,9 @@ TOOLTIPS = {
     "time_h": (
         "Hur lång tid rutten får ta, i timmar, räknat från start till slut. Körtiden och "
         "uppehållen ingår. Verktyget letar efter den rutt som ger flest nya kommuner inom "
-        "tiden. Raster 0,25 till 96 timmar, standard 10."
+        "tiden. Intervall 0,25 till 96 timmar. Lämnas tom planeras i stället den kortaste "
+        "rutten som tar alla kommuner du inte redan besökt (kan bli flera dygn). Längre "
+        "beräkningstid ger då en kortare rutt."
     ),
     "visited": (
         "Kommuner du redan har varit i. De ger ingen poäng, och rutten planeras inte för att "
@@ -249,6 +271,10 @@ def _fmt_duration(seconds):
     if seconds < 3600:
         return "{} min".format(int(round(seconds / 60.0)))
     return "{} h {} min".format(seconds // 3600, (seconds % 3600) // 60)
+
+
+def _fmt_budget(budget):
+    return _fmt_duration(budget) if budget != float("inf") else "obegränsad"
 
 
 def _fmt_num(v, decimals=1):
@@ -566,7 +592,27 @@ def _kommun_matrix(base, kommuner, steps):
     return m
 
 
+ROUTE_CHUNK = 80          # mellanpunkter per ruttanrop, så att URL:en inte blir för lång
+
+
 def _osrm_route(base, points):
+    """Rutten genom punkterna. Många punkter delas i bitar som får gemensamma ändpunkter och
+    sätts ihop: geometri, delsträckor, tid och längd."""
+    if len(points) <= ROUTE_CHUNK:
+        return _osrm_route_once(base, points)
+    parts = [_osrm_route_once(base, points[i:i + ROUTE_CHUNK + 1])
+             for i in range(0, len(points) - 1, ROUTE_CHUNK)]
+    coords = []
+    for part in parts:
+        c = part["geometry"]["coordinates"]
+        coords.extend(c[1:] if coords else c)
+    return {"geometry": {"coordinates": coords},
+            "legs": [l for part in parts for l in part["legs"]],
+            "duration": sum(part["duration"] for part in parts),
+            "distance": sum(part["distance"] for part in parts)}
+
+
+def _osrm_route_once(base, points):
     # continue_straight=false: bilprofilen förbjuder annars U-sväng vid mellanpunkter, vilket
     # tabelltjänsten inte gör. Mätt: 80 716 s mot 78 646 s för samma 12 punkter.
     url = ("{}/route/v1/driving/{}?overview=full&geometries=geojson&steps=false"
@@ -613,7 +659,7 @@ def _fill(C, budget, r, allowed, rng, pick=1):
         if len(cand) == 0:
             break
         pos, val = _insertion_costs(C, r, cand)
-        ok = np.flatnonzero(cost + val <= budget + 1e-9)
+        ok = np.flatnonzero(np.isfinite(val) & (cost + val <= budget + 1e-9))
         if len(ok) == 0:
             break
         if pick > 1 and len(ok) > 1:
@@ -697,7 +743,9 @@ def _solve(C, budget, allowed, seconds, rng, progress=None):
     last_report = t0
     stall = 0
     iterations = 0
-    while time.time() - t0 < seconds and len(best) - 2 < n_allowed and stall < STALL_LIMIT:
+    unlimited = not np.isfinite(budget)      # alla kommuner tas, målet är kortast möjliga rutt
+    while time.time() - t0 < seconds and (unlimited or len(best) - 2 < n_allowed) \
+            and stall < STALL_LIMIT:
         iterations += 1
         r = list(best)
         stops = len(r) - 2
@@ -800,16 +848,20 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
     """
     steps = _Steps(5, messages)
     base = (osrm_url or OSRM_URL).strip().rstrip("/")
-    budget = hours * 3600.0
+    budget = float("inf") if hours is None else hours * 3600.0
     service = max(0.0, service_min) * 60.0
     factor = 100.0 / max(1.0, speed_pct)
     roundtrip = end_pt is None
     if roundtrip:
         end_pt = start_pt
         messages.addMessage(
-            "Ingen slutpunkt angiven: planerar en rundtur som börjar och slutar i startpunkten "
-            "och utnyttjar tidsramen på {} h.".format(_fmt_num(hours, 1)))
-    if not (0 < hours):
+            "Ingen slutpunkt angiven: planerar en rundtur som börjar och slutar i startpunkten"
+            + (" och utnyttjar tidsramen på {} h.".format(_fmt_num(hours, 1)) if hours else "."))
+    if hours is None:
+        messages.addMessage(
+            "Ingen tidsram angiven: planerar den kortaste rutten som tar alla kommuner som "
+            "inte redan är besökta.")
+    elif not (0 < hours):
         raise ValueError("Tidsramen måste vara större än noll.")
 
     # ---- 1. Kommuner ------------------------------------------------------
@@ -856,6 +908,13 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
         allowed[i] = np.isfinite(C[0, i]) and np.isfinite(C[i, 1]) and C[0, i] + C[i, 1] <= budget
     messages.addMessage("    {} kommuner är möjliga att nå inom tidsramen och inte besökta.".format(
         int(allowed.sum())))
+    cut = [k["namn"] for k in kommuner
+           if k["kod"] not in known_visited and k["kod"] not in home
+           and not (np.isfinite(C[0, index[k["kod"]] + 2]) and np.isfinite(C[index[k["kod"]] + 2, 1]))]
+    if cut and hours is None:
+        messages.addWarningMessage(
+            "{} kommuner går inte att nå med bil från start till slut och hoppas över: {}".format(
+                len(cut), ", ".join(cut[:10]) + (" ..." if len(cut) > 10 else "")))
     if C[0, 1] > budget:
         raise ValueError(
             "Det går inte att köra från start till slut inom tidsramen (tar {}).".format(
@@ -865,7 +924,7 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
 
     def progress(count, cost, elapsed, total):
         text = "Optimerar: {} kommuner hittills, {} av {}".format(
-            count, _fmt_duration(cost), _fmt_duration(budget))
+            count, _fmt_duration(cost), _fmt_budget(budget))
         steps.label(text)
 
     eff_budget = budget
@@ -874,7 +933,7 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
         stops = [kommuner[i - 2] for i in route[1:-1]]
         messages.addMessage(
             "    Rutt med {} stopp, beräknad tid {} (tidsram {}), {} förbättringsvarv.".format(
-                len(stops), _fmt_duration(cost), _fmt_duration(budget), iters))
+                len(stops), _fmt_duration(cost), _fmt_budget(budget), iters))
         if attempt == 0:
             steps.done()
             # ---- 4. Verklig rutt ----------------------------------------------
@@ -896,7 +955,7 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
     if total > budget + 1.0:
         messages.addWarningMessage(
             "Verklig körtid {} är längre än tidsramen {}. Minska tidsramen något.".format(
-                _fmt_duration(total), _fmt_duration(budget)))
+                _fmt_duration(total), _fmt_budget(budget)))
 
     line = _route_line(osrm)
     # Ankomsttid: körtid hittills plus uppehållen vid tidigare stopp.
@@ -944,7 +1003,7 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
          ("Nya", "LONG", "Nya kommuner", None),
          ("Stopp", "LONG", "Antal stopp", None),
          ("Passeras", "LONG", "Passerade nya kommuner", None)],
-        [(line, total / 60.0, sum(legs) / 60.0, length_km, budget / 60.0,
+        [(line, total / 60.0, sum(legs) / 60.0, length_km, budget / 60.0 if np.isfinite(budget) else None,
           n_new, n_stop, n_pass)],
         sr)
     rows = []
@@ -980,7 +1039,7 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
         "Klart: {} nya kommuner ({} stopp, {} passeras, {} vid start och slut). "
         "Totalt {} på {} km, tidsram {}.".format(
             n_new, n_stop, n_pass, n_ends, _fmt_duration(total),
-            _fmt_num(length_km, 0), _fmt_duration(budget)))
+            _fmt_num(length_km, 0), _fmt_budget(budget)))
     if known_visited:
         messages.addMessage("Redan besökta kommuner räknas inte: {}.".format(len(known_visited)))
     return n_new, n_stop
@@ -1100,8 +1159,7 @@ class PlaneraKommunrutt:
 
         p_hours = arcpy.Parameter(
             displayName="Tidsram (timmar)", name="time_h", datatype="GPDouble",
-            parameterType="Required", direction="Input")
-        p_hours.value = DEFAULT_HOURS
+            parameterType="Optional", direction="Input")
 
         p_visited = arcpy.Parameter(
             displayName="Redan besökta kommuner", name="visited", datatype="GPString",
@@ -1264,7 +1322,8 @@ class PlaneraKommunrutt:
             layer = p["kommun_layer"].valueAsText and p["kommun_layer"].value
             if layer and not p["kommun_field"].valueAsText:
                 raise ValueError("Välj fältet med kommunkod eller kommunnamn i kommungränserna.")
-            _run(start_pt, end_pt, float(p["time_h"].value), visited,
+            _run(start_pt, end_pt,
+                 None if p["time_h"].value is None else float(p["time_h"].value), visited,
                  p["osrm_url"].valueAsText, layer or None, p["kommun_field"].valueAsText,
                  float(p["service_min"].value or 0), float(p["speed_pct"].value or 100),
                  int(p["solver_s"].value or DEFAULT_SOLVER_SECONDS),

@@ -9,6 +9,7 @@ Verktyget är gjort för kommunfångst: att samla så många kommuner som möjli
 - En dagstur: ange bara en startpunkt, så får du en rundtur som utnyttjar hela tidsramen och tar flest nya kommuner innan du är hemma igen.
 - En längre resa: ange start och slut, och ta så många kommuner som möjligt på vägen.
 - Små kommuner nära varandra och motorvägar mellan dem lönar sig mest. Verktyget väger in vägarnas hastighet, så det hittar de sträckor där många kommuner går att ta på kort tid.
+- Alla kommuner: lämna tidsramen tom. Verktyget planerar då den kortaste rutten som tar alla kommuner du inte redan besökt. Från Malmö till Stockholm blev det 290 kommuner på 281 timmar och cirka 14 400 km (15 h körning per dygn blir ungefär 19 dygn). Rutten är en heuristisk lösning, inte bevisat kortast; längre beräkningstid ger en kortare rutt. Kommuner som inte går att nå med bil hoppas över och listas som varning.
 - Exportera rutten som GPX och lägg in den i GPS eller mobilapp.
 
 Kommuner som rutten bara passerar räknas också som nya så snart rutten går minst 10 m in i kommunen.
@@ -28,7 +29,7 @@ Catalog-fönstret: högerklicka Toolboxes, Add Toolbox, välj `BesokKommuner.pyt
 |---|---|
 | Startpunkt | Punktlager eller en ritad punkt. Första punkten används. |
 | Slutpunkt | Valfri. Tom betyder att bara startpunkten används: rutten börjar och slutar där och utnyttjar hela tidsramen (rundtur). |
-| Tidsram (timmar) | Total tid från start till slut, körtid och uppehåll inräknat. 0,25 till 96. |
+| Tidsram (timmar) | Valfri. Total tid från start till slut, körtid och uppehåll inräknat. 0,25 till 96. Tom betyder att den kortaste rutten som tar alla kommuner du inte redan besökt planeras. |
 | Redan besökta kommuner | Kryssruteslista med alla 290 kommuner. |
 | Tabell med besökta kommuner | Valfri tabell. Läggs till kryssrutornas val. |
 | Fält med kommunkod eller kommunnamn | Fältet i tabellen. Kod (`0180`) eller namn (`Stockholm`) går bra. |
