@@ -23,6 +23,7 @@ Catalog-fönstret: högerklicka Toolboxes, Add Toolbox, välj `BesokKommuner.pyt
 | Fält med kommunkod eller kommunnamn | Fältet i tabellen. Kod (`0180`) eller namn (`Stockholm`) går bra. |
 | Utdata: rutt | Linjeklass med rutten och dess tid, längd och antal nya kommuner. |
 | Utdata: kommuner | Polygonklass med status per kommun, stoppnummer och ankomsttid. |
+| Utdata: GPX-fil | Valfri. En rutt (start, stopp, slut) och ett spår med hela vägen, för GPS eller mobilapp. |
 | Uppehåll per kommun (min) | Standard 0. Tid som räknas av per kommun du stannar i. |
 | Hastighet jämfört med modellen (%) | Standard 100. 90 ger 11 procent längre körtid. |
 | Beräkningstid för optimeringen (s) | Standard 30. |

@@ -198,6 +198,12 @@ TOOLTIPS = {
         "passeras, redan besökt, inte besökt). Stoppen har ordningsnummer och ankomsttid "
         "i minuter från start. Skrivs över om miljön Skriv över utdata är på."
     ),
+    "out_gpx": (
+        "Valfri GPX-fil för GPS eller mobilapp. Filen innehåller dels en rutt (rte) med start, "
+        "alla stopp och slut som namngivna punkter, dels ett spår (trk) med hela den "
+        "körda vägen. Spåret följer exakt de vägar som planerats, rutten låter en navigator "
+        "räkna om mellan stoppen. Använd det som din enhet stödjer. Befintlig fil skrivs över."
+    ),
     "service_min": (
         "Tid i minuter som läggs på för varje kommun du stannar i, till exempel för att "
         "fika. Standard 0: det räcker att köra in i kommunen. Tiden räknas av från "
@@ -761,12 +767,31 @@ def _export(out_path, geometry_type, fields, rows, sr):
             pass
 
 
+def _write_gpx(path, title, via, track):
+    """GPX 1.1 med en rutt (via: lista av (namn, lon, lat)) och ett spår (track: lon, lat)."""
+    q = lambda t: escape(t, {'"': "&quot;"})
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<gpx version="1.1" creator="Besök kommuner" xmlns="http://www.topografix.com/GPX/1/1">',
+           "<metadata><name>{}</name></metadata>".format(q(title)),
+           "<rte><name>{}</name>".format(q(title))]
+    for name, lon, lat in via:
+        out.append('<rtept lat="{:.6f}" lon="{:.6f}"><name>{}</name></rtept>'.format(
+            lat, lon, q(name)))
+    out.append("</rte>")
+    out.append("<trk><name>{}</name><trkseg>".format(q(title)))
+    out.extend('<trkpt lat="{:.6f}" lon="{:.6f}"/>'.format(lat, lon) for lon, lat in track)
+    out.append("</trkseg></trk></gpx>")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(out))
+
+
 # =============================================================================
 # Körningens innehåll (separat funktion - går att testa utanför Pro)
 # =============================================================================
 
 def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
-         service_min, speed_pct, solver_s, out_route, out_kommuner, messages):
+         service_min, speed_pct, solver_s, out_route, out_kommuner, messages,
+         out_gpx=None):
     """
     start_pt, end_pt: PointGeometry i SWEREF 99 TM (end_pt None = tillbaka till start).
     visited: mängd av kommunkoder som redan är besökta.
@@ -933,6 +958,18 @@ def _run(start_pt, end_pt, hours, visited, osrm_url, kommun_layer, kommun_field,
          ("Vag_m", "LONG", "Rutt i kommunen (m)", None),
          ("Tidigare", "TEXT", "Redan besökt", 3)],
         rows, sr)
+    if out_gpx:
+        steps.label("skriver GPX-fil")
+        via = ([("Start", ends[0][0], ends[0][1])]
+               + [("{}. {}".format(n + 1, k["namn"]), k["lon"], k["lat"])
+                  for n, k in enumerate(stops)]
+               + [("Slut", ends[1][0], ends[1][1])])
+        try:
+            _write_gpx(out_gpx, "Kommunrutt, {} nya kommuner".format(n_new), via,
+                       osrm["geometry"]["coordinates"])
+        except OSError as exc:
+            raise ValueError("Kunde inte skriva GPX-filen ({}).".format(exc))
+        messages.addMessage("    GPX-fil skriven: {}".format(out_gpx))
     steps.done()
 
     messages.addMessage(
@@ -1090,6 +1127,11 @@ class PlaneraKommunrutt:
             p_out_route.value = os.path.join(ws, "Kommunrutt")
             p_out_kom.value = os.path.join(ws, "Kommunrutt_kommuner")
 
+        p_gpx = arcpy.Parameter(
+            displayName="Utdata: GPX-fil (valfri)", name="out_gpx", datatype="DEFile",
+            parameterType="Optional", direction="Output")
+        p_gpx.filter.list = ["gpx"]
+
         p_service = arcpy.Parameter(
             displayName="Uppehåll per kommun (min)", name="service_min", datatype="GPDouble",
             parameterType="Optional", direction="Input", category="Alternativ")
@@ -1122,7 +1164,7 @@ class PlaneraKommunrutt:
         p_lfield.enabled = False
 
         return [p_start, p_end, p_hours, p_visited, p_table, p_field, p_out_route, p_out_kom,
-                p_service, p_speed, p_solver, p_osrm, p_layer, p_lfield]
+                p_gpx, p_service, p_speed, p_solver, p_osrm, p_layer, p_lfield]
 
     def isLicensed(self):
         return True
@@ -1222,7 +1264,8 @@ class PlaneraKommunrutt:
                  p["osrm_url"].valueAsText, layer or None, p["kommun_field"].valueAsText,
                  float(p["service_min"].value or 0), float(p["speed_pct"].value or 100),
                  int(p["solver_s"].value or DEFAULT_SOLVER_SECONDS),
-                 p["out_route"].valueAsText, p["out_kommuner"].valueAsText, messages)
+                 p["out_route"].valueAsText, p["out_kommuner"].valueAsText, messages,
+                 p["out_gpx"].valueAsText)
         except ValueError as exc:
             error = str(exc)
         finally:
